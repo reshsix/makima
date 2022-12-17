@@ -13,13 +13,20 @@
 # along with makima. If not, see <https://www.gnu.org/licenses/>.
 
 CFLAGS += -Iinclude -Og -ggdb3 -Wall -Wextra
-LDFLAGS += -lcurl -L/usr/local/lib -ljson-c
+LDFLAGS += -L/usr/local/lib -lcurl -ljson-c
 
 .PHONY: all clean
 
 all: build/libmakima.a
 clean:
 	rm -rf build
+
+install: include/makima build/libmakima.a
+	cp -r include/makima "$(DESTDIR)/usr/include/"
+	cp build/libmakima.a "$(DESTDIR)/usr/local/lib/"
+uninstall:
+	rm -rf "$(DESTDIR)/usr/include/makima/"
+	rm -rf "$(DESTDIR)/usr/local/lib/libmakima.a"
 
 build/libmakima.a: build/gateway.o | build
 	ar ruv $@ $^
