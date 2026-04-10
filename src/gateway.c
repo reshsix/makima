@@ -28,9 +28,7 @@ along with makima. If not, see <https://www.gnu.org/licenses/>.
 #include <curl/curl.h>
 #include <json-c/json.h>
 
-/*
-    Type definitions
-*/
+/* Type definitions */
 
 enum status
 {
@@ -49,34 +47,22 @@ enum message
 struct gateway
 {
     CURL *curl;
-    CURLM *multi;
 
     char *token;
     char *url;
     char *agent;
 
-    char *os;
-    char *browser;
-    char *device;
-    int intents;
-
     char *session;
-    int shard_i;
-    int shard_c;
 
     int64_t seq;
     bool ack;
 
     int interval;
-    int timeout;
 
     char *inbuf;
     size_t inbuf_c;
     size_t inbuf_s;
     bool partial;
-
-    char *outbuf;
-    size_t outbuf_s;
 
     bool killed;
     bool reconnect;
@@ -85,16 +71,13 @@ struct gateway
     pthread_t hb;
     bool hb_active;
 
-    int in;
-    int out;
-
     enum status status;
     char tag[64];
+
+    bool (*on_message)(const char *, const char *);
 };
 
-/*
-    Auxiliar functions
-*/
+/* Auxiliar functions */
 
 static void
 sleep_ms(int ms)
@@ -110,15 +93,13 @@ sleep_ms(int ms)
     #endif
 }
 
-/*
-    General gateway functions
-*/
+/* General gateway functions */
 
 static void
 message(struct gateway *g, enum message type, char *string)
 {
     fprintf(stderr, "makima_gateway [%s]: ", (g->tag[0] != '\0') ?
-                                             g->tag : "?");
+                                              g->tag : "?");
     switch (type)
     {
         case MESSAGE_WARN:
@@ -180,9 +161,7 @@ event(struct gateway *g, int op, struct json_object *d)
     return ret;
 }
 
-/*
-    Parsing and specific gateway functions
-*/
+/* Parsing and specific gateway functions */
 
 static void
 ready(struct gateway *g, struct json_object *d)
@@ -234,10 +213,8 @@ heartbeat(struct gateway *g)
 {
     bool ret = true;
 
-    struct json_object *d = (g->seq > 0) ? json_object_new_int(g->seq) :
-                                            NULL;
+    struct json_object *d = (g->seq > 0) ? json_object_new_int(g->seq) : NULL;
     ret = event(g, 1, d);
-    json_object_put(d);
 
     return ret;
 }
@@ -253,13 +230,13 @@ heartbeat_thread(void *arg)
     {
         g->ack = false;
         heartbeat(g);
-        sleep_ms(g->timeout);
+        sleep_ms(5000);
         if (!g->ack)
         {
-            message(g, MESSAGE_WARN, "Heartbeat ack not received");
-            curl_multi_remove_handle(g->multi, g->curl);
+            message(g, MESSAGE_ERROR, "Heartbeat ack not received");
+            die(g, STATUS_ERROR);
         }
-        sleep_ms(g->interval - g->timeout);
+        sleep_ms(g->interval - 5000);
     }
     g->hb_active = false;
 
@@ -287,29 +264,25 @@ identify(struct gateway *g, struct json_object *d)
     else
     {
         struct json_object *shards = json_object_new_array();
-        json_object_array_add(shards, json_object_new_int(g->shard_i));
-        json_object_array_add(shards, json_object_new_int(g->shard_c));
+        json_object_array_add(shards, json_object_new_int(0));
+        json_object_array_add(shards, json_object_new_int(1));
 
         struct json_object *prop = json_object_new_object();
-        json_object_object_add(prop, "os", json_object_new_string(g->os));
+        json_object_object_add(prop, "os", json_object_new_string("unix"));
         json_object_object_add(prop, "browser",
-                               json_object_new_string(g->browser));
+                               json_object_new_string("makima"));
         json_object_object_add(prop, "device",
-                               json_object_new_string(g->device));
+                               json_object_new_string("makima"));
 
         struct json_object *data = json_object_new_object();
         json_object_object_add(data, "properties", prop);
         json_object_object_add(data, "shards", shards);
-        json_object_object_add(data, "token",
-                               json_object_new_string(g->token));
-        json_object_object_add(data, "intents",
-                               json_object_new_int(g->intents));
+        json_object_object_add(data, "token", json_object_new_string(g->token));
+
+        uint32_t intents = (1 << 0) | (1 << 9) | (1 << 15);
+        json_object_object_add(data, "intents", json_object_new_int(intents));
 
         ret = event(g, 2, data);
-
-        json_object_put(shards);
-        json_object_put(prop);
-        json_object_put(data);
     }
 
     if (ret)
@@ -331,6 +304,37 @@ identify(struct gateway *g, struct json_object *d)
                     "Couldn't determine heartbeat interval");
             ret = die(g, STATUS_ERROR);
         }
+    }
+
+    return ret;
+}
+
+static bool
+parse_message(struct gateway *g, struct json_object *d)
+{
+    bool ret = false;
+
+    if (d != NULL)
+    {
+        struct json_object *author = NULL;
+        const char *content = NULL;
+        json_object_object_foreach(d, key, val)
+        {
+            if (strcmp(key, "author") == 0)
+                author = val;
+            else if (strcmp(key, "content") == 0)
+                content = json_object_get_string(val);
+        }
+
+        const char *name = NULL;
+        json_object_object_foreach(author, key2, val2)
+        {
+            if ((!name && strcmp(key2, "username")    == 0) ||
+                          strcmp(key2, "global_name") == 0)
+                name = json_object_get_string(val2);
+        }
+
+        ret = g->on_message(name, content);
     }
 
     return ret;
@@ -367,21 +371,19 @@ parse(struct gateway *g)
         switch (op)
         {
             case 0:
-                write(g->out, g->inbuf, strlen(g->inbuf));
-                write(g->out, "\n", 1);
-                fsync(g->out);
-
                 if (strcmp(t, "READY") == 0)
                     ready(g, d);
                 else if (strcmp(t, "RESUMED") == 0)
                     message(g, MESSAGE_WARN, "Resumed");
+                else if (strcmp(t, "MESSAGE_CREATE") == 0)
+                    ret = parse_message(g, d);
                 break;
             case 1:
                 ret = heartbeat(g);
                 break;
             case 7:
                 message(g, MESSAGE_WARN,
-                            "Received reconnect request, reconnecting");
+                        "Received reconnect request, reconnecting");
                 ret = reconnect(g);
                 break;
             case 9:
@@ -404,17 +406,12 @@ parse(struct gateway *g)
         json_object_put(obj);
     }
     else
-    {
-        message(g, MESSAGE_WARN, "Partial json, trying to read more");
         g->partial = true;
-    }
 
     return ret;
 }
 
-/*
-    Main input and output functions
-*/
+/* Main input and output functions */
 
 static size_t
 callback(void *content, size_t size, size_t nmemb, void *userp)
@@ -491,204 +488,30 @@ callback(void *content, size_t size, size_t nmemb, void *userp)
     return (ret) ? size * nmemb : 0;
 }
 
-static bool
-input(struct gateway *g)
+/* Initialization and main loop */
+
+extern bool
+makima_run(char *token, bool (*on_message)(const char *, const char *))
 {
-    char ret = true;
+    struct gateway g = {.token = token, .on_message = on_message};
 
-    char buffer[256];
-    size_t c = 0;
-    while (true)
-    {
-        ssize_t i = read(g->in, buffer, 256);
-        if (i <= 0)
-            break;
-
-        c += i;
-        if (g->outbuf == NULL)
-        {
-            g->outbuf_s = 512;
-            g->outbuf = malloc(g->outbuf_s);
-        }
-
-        if (c > g->outbuf_s)
-        {
-            while (g->outbuf_s < (c + 1))
-                g->outbuf_s *= 2;
-
-            g->outbuf = realloc(g->outbuf, g->outbuf_s);
-        }
-
-        if (g->outbuf != NULL)
-        {
-            memcpy(&(g->outbuf[c - i]), buffer, i);
-        }
-        else
-        {
-            message(g, MESSAGE_FATAL, "Allocation failed");
-            ret = die(g, STATUS_FATAL);
-            break;
-        }
-    }
-
-    if (ret)
-    {
-        g->outbuf[c] = '\0';
-
-        struct json_object *obj = json_tokener_parse(g->outbuf);
-        if (obj != NULL)
-        {
-            int op = 0;
-            struct json_object *d = NULL;
-            json_object_object_foreach(obj, key, val)
-            {
-                if (strcmp(key, "op") == 0)
-                    op = json_object_get_int(val);
-                else if (strcmp(key, "d") == 0)
-                    d = val;
-            }
-
-            if (op >= 0)
-            {
-                ret = event(g, op, d);
-            }
-            else
-            {
-                switch (op)
-                {
-                    case -1:
-                        ret = reconnect(g);
-                        break;
-                    case -2:
-                        ret = die(g, STATUS_OK);
-                        break;
-                }
-            }
-            json_object_put(obj);
-        }
-        else
-        {
-            message(g, MESSAGE_WARN, "Failed to parse json");
-        }
-    }
-
-    return ret;
-}
-
-/*
-    Initialization and main loop
-*/
-
-static CURLcode
-makima_gateway_loop(struct gateway *g)
-{
-    int sockets = 0;
-    do
-    {
-        fd_set fdread;
-        fd_set fdwrite;
-        fd_set fdexcep;
-        int maxfd = -1;
-        long timeout = 0;
-
-        curl_multi_timeout(g->multi, &timeout);
-        if (timeout < 0)
-            timeout = g->timeout;
-
-        struct timeval tv = {0};
-        tv.tv_sec = timeout / 1000;
-        tv.tv_usec = (timeout % 1000) * 1000;
-
-        FD_ZERO(&fdread);
-        FD_ZERO(&fdwrite);
-        FD_ZERO(&fdexcep);
-
-        CURLMcode mc = curl_multi_fdset(g->multi, &fdread, &fdwrite,
-                                         &fdexcep, &maxfd);
-        if (mc != CURLM_OK)
-        {
-            char err[256] = {0};
-            sprintf(err, "curl: %s", curl_multi_strerror(mc));
-            message(g, MESSAGE_ERROR, err);
-            die(g, STATUS_ERROR);
-            break;
-        }
-
-        FD_SET(g->in, &fdread);
-        if (g->in > maxfd)
-            maxfd = g->in;
-
-        select(maxfd + 1, &fdread, &fdwrite, &fdexcep, &tv);
-        curl_multi_perform(g->multi, &sockets);
-
-        if (FD_ISSET(g->in, &fdread))
-        {
-            if (!input(g))
-                break;
-        }
-    } while (sockets > 0);
-
-    CURLcode res = CURLE_OK;
-    int remaining = 0;
-    do
-    {
-        CURLMsg *msg = curl_multi_info_read(g->multi, &remaining);
-        if (msg != NULL && msg->msg == CURLMSG_DONE &&
-                           msg->easy_handle == g->curl)
-        {
-            res = msg->data.result;
-            break;
-        }
-    } while (remaining > 0);
-
-    return res;
-}
-
-extern int
-makima_gateway(char *token, int intents, int shard_i,
-               int shard_c, int in, int out)
-{
-    struct gateway g = {0};
-
-    g.token = token;
-    g.os = "unix";
-    g.browser = "makima";
-    g.device = "makima";
-    g.intents = intents;
-    g.agent = "DiscordBot (https://github.com/reshsix/makima, 0.0)";
-    g.shard_i = shard_i;
-    g.shard_c = shard_c;
-    g.timeout = 5000;
     g.reconnect = true;
-    g.in = in;
-    g.out = out;
-
-    int flags = fcntl(g.in, F_GETFL, 0);
-    fcntl(g.in, F_SETFL, flags | O_NONBLOCK);
-    flags = fcntl(g.out, F_GETFL, 0);
-    fcntl(g.out, F_SETFL, flags | O_NONBLOCK);
-
     while (g.reconnect)
     {
         curl_global_init(CURL_GLOBAL_ALL);
-
         g.curl = curl_easy_init();
-        g.multi = curl_multi_init();
-        curl_multi_add_handle(g.multi, g.curl);
 
-        char *url = g.url;
-        if (g.url == NULL)
-            url = "wss://gateway.discord.gg/?v=10&encoding=json";
-        curl_easy_setopt(g.curl, CURLOPT_URL, url);
+        if (!g.url)
+            g.url = strdup("wss://gateway.discord.gg/?v=10&encoding=json");
+
+        curl_easy_setopt(g.curl, CURLOPT_URL, g.url);
         curl_easy_setopt(g.curl, CURLOPT_WRITEFUNCTION, callback);
         curl_easy_setopt(g.curl, CURLOPT_WRITEDATA, &g);
         curl_easy_setopt(g.curl, CURLOPT_USERAGENT, g.agent);
         curl_easy_setopt(g.curl, CURLOPT_VERBOSE, 0);
-
         g.killed = false;
 
-        CURLcode res = makima_gateway_loop(&g);
-
+        CURLcode res = curl_easy_perform(g.curl);
         if (!g.killed && res != CURLE_OK)
         {
             if (res != CURLE_WRITE_ERROR)
@@ -699,7 +522,6 @@ makima_gateway(char *token, int intents, int shard_i,
             }
             die(&g, STATUS_ERROR);
         }
-
         curl_easy_cleanup(g.curl);
         curl_global_cleanup();
 
@@ -711,6 +533,7 @@ makima_gateway(char *token, int intents, int shard_i,
     if (g.hb_active)
         pthread_cancel(g.hb);
     free(g.inbuf);
+    free(g.url);
 
-    return (g.status == STATUS_OK) ? EXIT_SUCCESS : EXIT_FAILURE;
+    return g.status == STATUS_OK;
 }

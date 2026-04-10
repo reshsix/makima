@@ -17,7 +17,6 @@ along with makima. If not, see <https://www.gnu.org/licenses/>.
 #ifndef MAKIMA_H
 #define MAKIMA_H
 
-int makima_gateway(char *token, int intents,
-                   int shard_i, int shard_c, int in, int out);
+bool makima_run(char *token, bool (*on_message)(const char *, const char *));
 
 #endif
