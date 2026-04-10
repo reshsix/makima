@@ -1,17 +1,17 @@
 /*
-This file is part of makima.
-
-Makima is free software: you can redistribute it and/or modify it
-under the terms of the GNU General Public License as published
-by the Free Software Foundation, version 3.
-
-Makima is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with makima. If not, see <https://www.gnu.org/licenses/>.
+ *  This file is part of makima.
+ *
+ *  Makima is free software: you can redistribute it and/or modify it
+ *  under the terms of the GNU General Public License as published
+ *  by the Free Software Foundation, version 3.
+ *
+ *  Makima is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *  See the GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with makima. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include <time.h>
@@ -54,7 +54,7 @@ struct gateway
 
     char *session;
 
-    int64_t seq;
+    uint64_t seq;
     bool ack;
 
     int interval;
@@ -74,7 +74,7 @@ struct gateway
     enum status status;
     char tag[64];
 
-    bool (*on_message)(const char *, const char *);
+    bool (*on_message)(const char *, uint64_t, uint64_t, uint64_t);
 };
 
 /* Auxiliar functions */
@@ -98,8 +98,7 @@ sleep_ms(int ms)
 static void
 message(struct gateway *g, enum message type, char *string)
 {
-    fprintf(stderr, "makima_gateway [%s]: ", (g->tag[0] != '\0') ?
-                                              g->tag : "?");
+    fprintf(stderr, "makima [%s]: ", (g->tag[0] != '\0') ? g->tag : "?");
     switch (type)
     {
         case MESSAGE_WARN:
@@ -279,7 +278,7 @@ identify(struct gateway *g, struct json_object *d)
         json_object_object_add(data, "shards", shards);
         json_object_object_add(data, "token", json_object_new_string(g->token));
 
-        uint32_t intents = (1 << 0) | (1 << 9) | (1 << 15);
+        uint32_t intents = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15);
         json_object_object_add(data, "intents", json_object_new_int(intents));
 
         ret = event(g, 2, data);
@@ -316,25 +315,30 @@ parse_message(struct gateway *g, struct json_object *d)
 
     if (d != NULL)
     {
-        struct json_object *author = NULL;
         const char *content = NULL;
+        uint64_t author     = 0;
+        uint64_t channel    = 0;
+        uint64_t server     = 0;
+
+        struct json_object *author_d = NULL;
         json_object_object_foreach(d, key, val)
         {
-            if (strcmp(key, "author") == 0)
-                author = val;
-            else if (strcmp(key, "content") == 0)
-                content = json_object_get_string(val);
+            if (strcmp(key, "content") == 0)
+                content   = json_object_get_string(val);
+            else if (strcmp(key, "author") == 0)
+                author_d  = val;
+            else if (strcmp(key, "channel_id") == 0)
+                channel   = json_object_get_uint64(val);
+            else if (strcmp(key, "guild_id") == 0)
+                server    = json_object_get_uint64(val);
         }
-
-        const char *name = NULL;
-        json_object_object_foreach(author, key2, val2)
+        json_object_object_foreach(author_d, key2, val2)
         {
-            if ((!name && strcmp(key2, "username")    == 0) ||
-                          strcmp(key2, "global_name") == 0)
-                name = json_object_get_string(val2);
+            if (strcmp(key2, "id") == 0)
+                author = json_object_get_uint64(val2);
         }
 
-        ret = g->on_message(name, content);
+        ret = g->on_message(content, author, channel, server);
     }
 
     return ret;
@@ -350,7 +354,7 @@ parse(struct gateway *g)
     if (obj != NULL)
     {
         int op = 0;
-        int64_t s = 0;
+        uint64_t s = 0;
         struct json_object *d = NULL;
         const char *t = NULL;
         json_object_object_foreach(obj, key, val)
@@ -358,7 +362,7 @@ parse(struct gateway *g)
             if (strcmp(key, "op") == 0)
                 op = json_object_get_int(val);
             else if (strcmp(key, "s") == 0)
-                s = json_object_get_int64(val);
+                s = json_object_get_uint64(val);
             else if (strcmp(key, "d") == 0)
                 d = val;
             else if (strcmp(key, "t") == 0)
@@ -491,7 +495,8 @@ callback(void *content, size_t size, size_t nmemb, void *userp)
 /* Initialization and main loop */
 
 extern bool
-makima_run(char *token, bool (*on_message)(const char *, const char *))
+makima_run(char *token,
+           bool (*on_message)(const char *, uint64_t, uint64_t, uint64_t))
 {
     struct gateway g = {.token = token, .on_message = on_message};
 

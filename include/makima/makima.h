@@ -17,6 +17,10 @@ along with makima. If not, see <https://www.gnu.org/licenses/>.
 #ifndef MAKIMA_H
 #define MAKIMA_H
 
-bool makima_run(char *token, bool (*on_message)(const char *, const char *));
+#include <stdint.h>
+#include <stdbool.h>
+
+bool makima_run(char *token,
+                bool (*on_message)(const char *, uint64_t, uint64_t, uint64_t));
 
 #endif

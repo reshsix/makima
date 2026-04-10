@@ -1,5 +1,5 @@
 # Makima
-***Status: 1.0α***
+**Status: 1.0α**
 
 ## Requirements
 - A POSIX environment
@@ -10,13 +10,13 @@
 ```c
 #include <stdio.h>
 #include <unistd.h>
-#include <stdbool.h>
 #include <makima/makima.h>
 
 static bool
-on_message(const char *name, const char *content)
+on_message(const char *content,
+           uint64_t author, uint64_t channel, uint64_t server)
 {
-    printf("%s: %s\n", name, content);
+    printf("%ld:%ld:%ld: %s\n", author, channel, server, content);
     return true;
 }
 
