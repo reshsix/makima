@@ -20,7 +20,13 @@ along with makima. If not, see <https://www.gnu.org/licenses/>.
 #include <stdint.h>
 #include <stdbool.h>
 
-bool makima_run(char *token,
-                bool (*on_message)(const char *, uint64_t, uint64_t, uint64_t));
+struct makima
+{
+    void *context;
+    bool (*on_message)(struct makima *m,
+                       uint64_t, uint64_t, uint64_t, const char *);
+};
+
+bool makima_next(struct makima *m);
 
 #endif

@@ -9,12 +9,12 @@
 ## Example
 ```c
 #include <stdio.h>
-#include <unistd.h>
 #include <makima/makima.h>
 
 static bool
-on_message(const char *content,
-           uint64_t author, uint64_t channel, uint64_t server)
+on_message(struct makima *m,
+           uint64_t author, uint64_t channel, uint64_t server,
+           const char *content)
 {
     printf("%ld:%ld:%ld: %s\n", author, channel, server, content);
     return true;
@@ -22,14 +22,15 @@ on_message(const char *content,
 
 int main(void)
 {
-    char *token = "TOKEN";
-    int ret = makima_run(token, on_message);
-    return ret;
+    struct makima m = {.on_message = on_message};
+    while (makima_next(&m));
+    return 0;
 }
 ```
 
 ```sh
 make
 sudo make install
-gcc test.c -L/usr/local/lib -lmakima -lcurl -ljson-c
+gcc test.c -lmakima
+makima TOKEN | ./a.out
 ```

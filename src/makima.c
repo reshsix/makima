@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <inttypes.h>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -73,8 +74,6 @@ struct gateway
 
     enum status status;
     char tag[64];
-
-    bool (*on_message)(const char *, uint64_t, uint64_t, uint64_t);
 };
 
 /* Auxiliar functions */
@@ -98,7 +97,7 @@ sleep_ms(int ms)
 static void
 message(struct gateway *g, enum message type, char *string)
 {
-    fprintf(stderr, "makima [%s]: ", (g->tag[0] != '\0') ? g->tag : "?");
+    fprintf(stderr, "%s: ", (g->tag[0] != '\0') ? g->tag : "?");
     switch (type)
     {
         case MESSAGE_WARN:
@@ -308,40 +307,35 @@ identify(struct gateway *g, struct json_object *d)
     return ret;
 }
 
-static bool
-parse_message(struct gateway *g, struct json_object *d)
+static void
+parse_message(struct json_object *d)
 {
-    bool ret = false;
+    const char *content = NULL;
+    uint64_t author     = 0;
+    uint64_t channel    = 0;
+    uint64_t server     = 0;
 
-    if (d != NULL)
+    struct json_object *author_d = NULL;
+    json_object_object_foreach(d, key, val)
     {
-        const char *content = NULL;
-        uint64_t author     = 0;
-        uint64_t channel    = 0;
-        uint64_t server     = 0;
-
-        struct json_object *author_d = NULL;
-        json_object_object_foreach(d, key, val)
-        {
-            if (strcmp(key, "content") == 0)
-                content   = json_object_get_string(val);
-            else if (strcmp(key, "author") == 0)
-                author_d  = val;
-            else if (strcmp(key, "channel_id") == 0)
-                channel   = json_object_get_uint64(val);
-            else if (strcmp(key, "guild_id") == 0)
-                server    = json_object_get_uint64(val);
-        }
-        json_object_object_foreach(author_d, key2, val2)
-        {
-            if (strcmp(key2, "id") == 0)
-                author = json_object_get_uint64(val2);
-        }
-
-        ret = g->on_message(content, author, channel, server);
+        if (strcmp(key, "content") == 0)
+            content   = json_object_get_string(val);
+        else if (strcmp(key, "author") == 0)
+            author_d  = val;
+        else if (strcmp(key, "channel_id") == 0)
+            channel   = json_object_get_uint64(val);
+        else if (strcmp(key, "guild_id") == 0)
+            server    = json_object_get_uint64(val);
+    }
+    json_object_object_foreach(author_d, key2, val2)
+    {
+        if (strcmp(key2, "id") == 0)
+            author = json_object_get_uint64(val2);
     }
 
-    return ret;
+    fprintf(stdout, "MESSAGE %" PRIu64 " %" PRIu64 " %" PRIu64 " %.255s\n",
+            author, channel, server, content);
+    fflush(stdout);
 }
 
 static bool
@@ -380,7 +374,7 @@ parse(struct gateway *g)
                 else if (strcmp(t, "RESUMED") == 0)
                     message(g, MESSAGE_WARN, "Resumed");
                 else if (strcmp(t, "MESSAGE_CREATE") == 0)
-                    ret = parse_message(g, d);
+                    parse_message(d);
                 break;
             case 1:
                 ret = heartbeat(g);
@@ -495,10 +489,9 @@ callback(void *content, size_t size, size_t nmemb, void *userp)
 /* Initialization and main loop */
 
 extern bool
-makima_run(char *token,
-           bool (*on_message)(const char *, uint64_t, uint64_t, uint64_t))
+makima_run(char *token)
 {
-    struct gateway g = {.token = token, .on_message = on_message};
+    struct gateway g = {.token = token};
 
     g.reconnect = true;
     while (g.reconnect)
@@ -541,4 +534,25 @@ makima_run(char *token,
     free(g.url);
 
     return g.status == STATUS_OK;
+}
+
+static bool
+usage(void)
+{
+    fprintf(stderr, "usage: makima TOKEN\n");
+    fprintf(stderr, "Establishes a connection with Discord gateway\n");
+    return false;
+}
+
+extern int
+main(int argc, char *argv[])
+{
+    bool ret = false;
+
+    if (argc == 2)
+        ret = makima_run(argv[1]);
+    else
+        ret = usage();
+
+    return (ret) ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -17,23 +17,28 @@ LDFLAGS += -L/usr/local/lib -lcurl -ljson-c
 
 .PHONY: all clean
 
-all: build/libmakima.a
+all: build/libmakima.a build/makima
 clean:
 	rm -rf build
 
-install: include/makima build/libmakima.a
+install: include/makima build/makima
 	cp -r include/makima "$(DESTDIR)/usr/include/"
 	cp build/libmakima.a "$(DESTDIR)/usr/local/lib/"
+	cp build/makima      "$(DESTDIR)/usr/local/bin/"
 uninstall:
 	rm -rf "$(DESTDIR)/usr/include/makima/"
 	rm -rf "$(DESTDIR)/usr/local/lib/libmakima.a"
+	rm -rf "$(DESTDIR)/usr/local/bin/makima"
 
-build/libmakima.a: build/gateway.o | build
+build/library.o: src/library.c | build
+	$(CC) $(CFLAGS) -c $< -o $@ $(LDFLAGS)
+
+build/libmakima.a: build/library.o | build
 	ar ruv $@ $^
 	ranlib $@
 
-build/gateway.o: src/gateway.c | build
-	$(CC) $(CFLAGS) -c $< -o $@ $(LDFLAGS)
+build/makima: src/makima.c | build
+	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
 
 build:
 	mkdir -p build
