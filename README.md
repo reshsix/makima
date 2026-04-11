@@ -17,11 +17,24 @@ on_message(makima *m, uint64_t author, uint64_t channel, uint64_t server,
 {
     bool ret = false;
 
-    char name[64]    = {0};
+    char  name[32  + 1] = {0};
+    char name2[100 + 1] = {0};
+    char name3[100 + 1] = {0};
     char avatar[128] = {0};
-    ret = makima_author(m, author, server, name, avatar);
+    char   icon[128] = {0};
+    bool direct = false;
+
+    ret = makima_author(m, author, server, name, avatar) &&
+          makima_channel(m, channel, name2, &direct) &&
+          makima_server(m, server, name3, icon);
     if (ret)
+    {
         printf("%s (%s): %s\n", name, avatar, content);
+        if (!direct)
+            printf("On %s from %s (%s)\n", name2, name3, icon);
+        else
+            printf("On DMs\n", name2, name3, icon);
+    }
 
     return ret;
 }

@@ -31,8 +31,10 @@ struct makima_cb
 makima *makima_new(void *ctx, struct makima_cb cb);
 makima *makima_del(makima *m);
 
-bool makima_author(makima *m,
-                   uint64_t author, uint64_t server, char *name, char *avatar);
+bool makima_author(makima *m, uint64_t author, uint64_t server,
+                   char *name, char *avatar);
+bool makima_channel(makima *m, uint64_t channel, char *name, bool *direct);
+bool makima_server(makima *m, uint64_t server, char *name, char *icon);
 
 bool makima_next(makima *m);
 

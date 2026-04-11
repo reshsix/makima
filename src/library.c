@@ -20,6 +20,7 @@ struct makima
     char *inbuf;
     size_t inbuf_c;
     size_t inbuf_s;
+    bool partial;
 };
 
 /* Initialization and clean-up */
@@ -69,6 +70,9 @@ callback(void *content, size_t size, size_t nmemb, void *userp)
     }
 
     size_t bytes = (size * nmemb) + 1;
+    if (m->partial)
+        bytes += m->inbuf_c - 1;
+
     if (bytes > m->inbuf_s)
     {
         uint8_t bits = 0;
@@ -80,13 +84,18 @@ callback(void *content, size_t size, size_t nmemb, void *userp)
 
     if (m->inbuf != NULL)
     {
-        memcpy(m->inbuf, content, bytes - 1);
+        if (m->partial)
+            memcpy(&(m->inbuf[m->inbuf_c - 1]), content,
+                   bytes - m->inbuf_c + 1);
+        else
+            memcpy(m->inbuf, content, bytes - 1);
         m->inbuf[bytes - 1] = '\0';
         m->inbuf_c = bytes;
     }
     else
         ret = false;
 
+    m->partial = true;
     return (ret) ? size * nmemb : 0;
 }
 
@@ -118,6 +127,7 @@ rest(struct makima *m, const char *mode, const char *point, const char *body)
     curl_easy_setopt(m->curl, CURLOPT_HTTPHEADER, h);
 
     CURLcode res = curl_easy_perform(m->curl);
+    m->partial = false;
 
     curl_slist_free_all(h);
 
@@ -158,6 +168,84 @@ makima_author(struct makima *m,
                 sprintf(avatar,
                         "https://cdn.discordapp.com/avatars/%" SCNu64 "/%s.png",
                         author, avatar2);
+        }
+        else
+            ret = false;
+        json_object_put(obj);
+    }
+
+    return ret;
+}
+
+extern bool
+makima_channel(struct makima *m, uint64_t channel, char *name, bool *direct)
+{
+    bool ret = true;
+
+    char point[128] = {0};
+    snprintf(point, sizeof(point), "channels/%" SCNu64, channel);
+
+    ret = rest(m, "GET", point, NULL);
+    if (ret)
+    {
+        const char *name2 = NULL;
+        int type = 0;
+
+        struct json_object *obj = json_tokener_parse(m->inbuf);
+        if (obj)
+        {
+            json_object_object_foreach(obj, key, val)
+            {
+                if (strcmp(key, "name") == 0)
+                    name2 = json_object_get_string(val);
+                else if (strcmp(key, "type") == 0)
+                    type  = json_object_get_int(val);
+            }
+
+            if (name && name2)
+                strncpy(name, name2, 100);
+            if (direct)
+                *direct = (type == 1 || type == 3);
+        }
+        else
+            ret = false;
+        json_object_put(obj);
+    }
+
+    return ret;
+}
+
+extern bool
+makima_server(struct makima *m, uint64_t server, char *name, char *icon)
+{
+    bool ret = true;
+
+    char point[128] = {0};
+    snprintf(point, sizeof(point), "guilds/%" SCNu64 "/preview", server);
+
+    ret = rest(m, "GET", point, NULL);
+    if (ret)
+    {
+        const char *name2 = NULL;
+        const char *icon2 = NULL;
+
+        struct json_object *obj = json_tokener_parse(m->inbuf);
+        if (obj)
+        {
+            json_object_object_foreach(obj, key, val)
+            {
+                if (strcmp(key, "name") == 0)
+                    name2 = json_object_get_string(val);
+                else if (strcmp(key, "icon") == 0)
+                    icon2 = json_object_get_string(val);
+            }
+
+            if (name && name2)
+                strncpy(name, name2, 100);
+            if (icon && icon2)
+                sprintf(icon,
+                        "https://cdn.discordapp.com/icons/%" SCNu64 "/%s.png",
+                        server, icon2);
         }
         else
             ret = false;
