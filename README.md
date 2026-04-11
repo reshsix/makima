@@ -37,7 +37,8 @@ on_message(makima *m, uint64_t author, uint64_t channel, uint64_t server,
     }
 
     if (strcmp(content, "!test") == 0)
-        ret = makima_say(m, channel, "aaaaa");
+        ret = makima_say(m, channel, "aaaaa!") &&
+              makima_react(m, channel, message, "annoyed:12345678912345678");
 
     return ret;
 }

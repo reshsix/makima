@@ -25,7 +25,7 @@ typedef struct makima makima;
 struct makima_cb
 {
     bool (*on_message)(struct makima *m,
-                       uint64_t, uint64_t, uint64_t, const char *);
+                       uint64_t, uint64_t, uint64_t, uint64_t, const char *);
 };
 
 makima *makima_new(void *ctx, struct makima_cb cb);
@@ -37,6 +37,8 @@ bool makima_channel(makima *m, uint64_t channel, char *name, bool *direct);
 bool makima_server(makima *m, uint64_t server, char *name, char *icon);
 
 bool makima_say(makima *m, uint64_t channel, char *content);
+bool makima_react(struct makima *m, uint64_t channel,
+                  uint64_t message, const char *emoji);
 
 bool makima_next(makima *m);
 

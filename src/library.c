@@ -113,7 +113,7 @@ rest(struct makima *m, const char *mode, const char *point, const char *body)
     if (body)
         curl_easy_setopt(m->curl, CURLOPT_POSTFIELDS, body);
 
-    char url[256] = {0};
+    char url[512] = {0};
     snprintf(url, sizeof(url), "https://discord.com/api/v10/%s", point);
     curl_easy_setopt(m->curl, CURLOPT_URL, url);
 
@@ -271,6 +271,18 @@ makima_say(struct makima *m, uint64_t channel, char *content)
     return ret;
 }
 
+extern bool
+makima_react(struct makima *m, uint64_t channel,
+                               uint64_t message, const char *emoji)
+{
+    char point[256] = {0};
+    snprintf(point, sizeof(point),
+             "channels/%" SCNu64 "/messages/%" SCNu64 "/reactions/%s/@me",
+             channel, message, emoji);
+
+    return rest(m, "PUT", point, NULL);
+}
+
 /* Event scheduler */
 
 static bool
@@ -285,12 +297,13 @@ on_message(struct makima *m, const char *line)
 {
     bool ret = false;
 
-    uint64_t author, channel, server;
+    uint64_t author, message, channel, server;
     int consumed = 0;
-    if (sscanf(line, "MESSAGE %" SCNu64 " %" SCNu64 " %" SCNu64 " %n",
-               &author, &channel, &server, &consumed) == 3)
-        ret = m->cb.on_message(m, author, channel, server, line + consumed);
-
+    if (sscanf(line,"MESSAGE %" SCNu64 " %" SCNu64
+                           " %" SCNu64 " %" SCNu64 " %n",
+               &author, &message, &channel, &server, &consumed) == 4)
+        ret = m->cb.on_message(m, author, message, channel,
+                               server, line + consumed);
     return ret;
 }
 

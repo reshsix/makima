@@ -308,6 +308,7 @@ parse_message(struct json_object *d)
 {
     const char *content = NULL;
     uint64_t author     = 0;
+    uint64_t message    = 0;
     uint64_t channel    = 0;
     uint64_t server     = 0;
 
@@ -318,6 +319,8 @@ parse_message(struct json_object *d)
             content   = json_object_get_string(val);
         else if (strcmp(key, "author") == 0)
             author_d  = val;
+        else if (strcmp(key, "id") == 0)
+            message   = json_object_get_uint64(val);
         else if (strcmp(key, "channel_id") == 0)
             channel   = json_object_get_uint64(val);
         else if (strcmp(key, "guild_id") == 0)
@@ -329,8 +332,9 @@ parse_message(struct json_object *d)
             author = json_object_get_uint64(val2);
     }
 
-    fprintf(stdout, "MESSAGE %" PRIu64 " %" PRIu64 " %" PRIu64 " %.255s\n",
-            author, channel, server, content);
+    fprintf(stdout, "MESSAGE %" PRIu64 " %" PRIu64
+                           " %" PRIu64 " %" PRIu64 " %.255s\n",
+            author, message, channel, server, content);
     fflush(stdout);
 }
 
