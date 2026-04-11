@@ -36,6 +36,8 @@ bool makima_author(makima *m, uint64_t author, uint64_t server,
 bool makima_channel(makima *m, uint64_t channel, char *name, bool *direct);
 bool makima_server(makima *m, uint64_t server, char *name, char *icon);
 
+bool makima_say(makima *m, uint64_t channel, char *content);
+
 bool makima_next(makima *m);
 
 #endif

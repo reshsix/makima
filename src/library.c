@@ -255,6 +255,22 @@ makima_server(struct makima *m, uint64_t server, char *name, char *icon)
     return ret;
 }
 
+extern bool
+makima_say(struct makima *m, uint64_t channel, char *content)
+{
+    bool ret = true;
+
+    char point[128] = {0};
+    snprintf(point, sizeof(point), "channels/%" SCNu64 "/messages", channel);
+
+    struct json_object *data = json_object_new_object();
+    json_object_object_add(data, "content", json_object_new_string(content));
+    ret = rest(m, "POST", point, json_object_to_json_string(data));
+    json_object_put(data);
+
+    return ret;
+}
+
 /* Event scheduler */
 
 static bool

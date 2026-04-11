@@ -254,8 +254,6 @@ identify(struct gateway *g, struct json_object *d)
                                json_object_new_string(g->session));
 
         ret = event(g, 6, data);
-
-        json_object_put(data);
     }
     else
     {

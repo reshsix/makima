@@ -36,6 +36,9 @@ on_message(makima *m, uint64_t author, uint64_t channel, uint64_t server,
             printf("On DMs\n", name2, name3, icon);
     }
 
+    if (strcmp(content, "!test") == 0)
+        ret = makima_say(m, channel, "aaaaa");
+
     return ret;
 }
 
