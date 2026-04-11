@@ -20,13 +20,20 @@ along with makima. If not, see <https://www.gnu.org/licenses/>.
 #include <stdint.h>
 #include <stdbool.h>
 
-struct makima
+typedef struct makima makima;
+
+struct makima_cb
 {
-    void *context;
     bool (*on_message)(struct makima *m,
                        uint64_t, uint64_t, uint64_t, const char *);
 };
 
-bool makima_next(struct makima *m);
+makima *makima_new(void *ctx, struct makima_cb cb);
+makima *makima_del(makima *m);
+
+bool makima_author(makima *m,
+                   uint64_t author, uint64_t server, char *name, char *avatar);
+
+bool makima_next(makima *m);
 
 #endif

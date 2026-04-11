@@ -51,10 +51,8 @@ struct gateway
 
     char *token;
     char *url;
-    char *agent;
 
     char *session;
-
     uint64_t seq;
     bool ack;
 
@@ -492,6 +490,7 @@ extern bool
 makima_run(char *token)
 {
     struct gateway g = {.token = token};
+    fprintf(stdout, "TOKEN %s\n", token);
 
     g.reconnect = true;
     while (g.reconnect)
@@ -502,10 +501,12 @@ makima_run(char *token)
         if (!g.url)
             g.url = strdup("wss://gateway.discord.gg/?v=10&encoding=json");
 
+        const char *agent =
+            "DiscordBot (https://github.com/reshsix/makima, 1.0)";
         curl_easy_setopt(g.curl, CURLOPT_URL, g.url);
         curl_easy_setopt(g.curl, CURLOPT_WRITEFUNCTION, callback);
         curl_easy_setopt(g.curl, CURLOPT_WRITEDATA, &g);
-        curl_easy_setopt(g.curl, CURLOPT_USERAGENT, g.agent);
+        curl_easy_setopt(g.curl, CURLOPT_USERAGENT, agent);
         curl_easy_setopt(g.curl, CURLOPT_VERBOSE, 0);
         g.killed = false;
 

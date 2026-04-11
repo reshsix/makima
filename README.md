@@ -12,18 +12,26 @@
 #include <makima/makima.h>
 
 static bool
-on_message(struct makima *m,
-           uint64_t author, uint64_t channel, uint64_t server,
+on_message(makima *m, uint64_t author, uint64_t channel, uint64_t server,
            const char *content)
 {
-    printf("%ld:%ld:%ld: %s\n", author, channel, server, content);
-    return true;
+    bool ret = false;
+
+    char name[64]    = {0};
+    char avatar[128] = {0};
+    ret = makima_author(m, author, server, name, avatar);
+    if (ret)
+        printf("%s (%s): %s\n", name, avatar, content);
+
+    return ret;
 }
 
 int main(void)
 {
-    struct makima m = {.on_message = on_message};
-    while (makima_next(&m));
+    struct makima_cb cb = {.on_message = on_message};
+    makima *m = makima_new(NULL, cb);
+    while (makima_next(m));
+    makima_del(m);
     return 0;
 }
 ```
