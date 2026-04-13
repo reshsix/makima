@@ -35,6 +35,8 @@ makima *makima_del(makima *m);
 
 bool makima_author(makima *m, uint64_t author, uint64_t server,
                    char *name, char *avatar);
+bool makima_message(makima *m, uint64_t channel, uint64_t message,
+                    uint64_t *author, char *content);
 bool makima_channel(makima *m, uint64_t channel, char *name, bool *direct);
 bool makima_server(makima *m, uint64_t server, char *name, char *icon);
 

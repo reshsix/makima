@@ -1,5 +1,5 @@
 # Makima
-**Status: 1.0α**
+**Status: 1.0β**
 
 ## Requirements
 - A POSIX environment
@@ -34,6 +34,7 @@ on_message(makima *m, uint64_t author, uint64_t channel, uint64_t server,
             printf("On %s from %s (%s)\n", name2, name3, icon);
         else
             printf("On DMs\n", name2, name3, icon);
+        printf("\n");
     }
 
     if (strcmp(content, "!test") == 0)
@@ -47,8 +48,36 @@ static bool
 on_reaction(makima *m, bool added, uint64_t author, uint64_t message,
             uint64_t channel, uint64_t server, const char *emoji)
 {
-    printf("%d %lu %lu %lu %lu %s\n",
-           added, author, message, channel, server, emoji);
+    bool ret = false;
+
+    char  content[2001] = {0};
+    char  name[32  + 1] = {0};
+    char name2[100 + 1] = {0};
+    char name3[100 + 1] = {0};
+    char name4[100 + 1] = {0};
+    char  avatar[128] = {0};
+    char avatar2[128] = {0};
+    char    icon[128] = {0};
+    bool direct = false;
+    uint64_t author2 = 0;
+
+    ret = makima_author(m, author, server, name, avatar) &&
+          makima_channel(m, channel, name2, &direct) &&
+          makima_server(m, server, name3, icon) &&
+          makima_message(m, channel, message, &author2, content) &&
+          makima_author(m, author2, server, name4, avatar2);
+    if (ret)
+    {
+        printf("%s (%s): reacted with '%s' at\n", name, avatar, emoji);
+        printf("%s (%s): %s\n", name4, avatar, content);
+        if (!direct)
+            printf("On %s from %s (%s)\n", name2, name3, icon);
+        else
+            printf("On DMs\n", name2, name3, icon);
+        printf("\n");
+    }
+
+    return ret;
 }
 
 int main(void)

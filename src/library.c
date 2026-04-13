@@ -178,6 +178,52 @@ makima_author(struct makima *m,
 }
 
 extern bool
+makima_message(struct makima *m, uint64_t channel, uint64_t message,
+               uint64_t *author, char *content)
+{
+    bool ret = true;
+
+    char point[128] = {0};
+    snprintf(point, sizeof(point),
+             "/channels/%" SCNu64 "/messages/%" SCNu64, channel, message);
+
+    ret = rest(m, "GET", point, NULL);
+    if (ret)
+    {
+        uint64_t author2     = 0;
+        const char *content2 = NULL;
+
+        struct json_object *obj = json_tokener_parse(m->inbuf);
+        if (obj)
+        {
+            struct json_object *author_d = NULL;
+            json_object_object_foreach(obj, key, val)
+            {
+                if (strcmp(key, "author") == 0)
+                    author_d = val;
+                else if (strcmp(key, "content") == 0)
+                    content2 = json_object_get_string(val);
+            }
+            json_object_object_foreach(author_d, key2, val2)
+            {
+                if (strcmp(key2, "id") == 0)
+                    author2 = json_object_get_uint64(val2);
+            }
+
+            if (author)
+                *author = author2;
+            if (content && content2)
+                strncpy(content, content2, 2000);
+        }
+        else
+            ret = false;
+        json_object_put(obj);
+    }
+
+    return ret;
+}
+
+extern bool
 makima_channel(struct makima *m, uint64_t channel, char *name, bool *direct)
 {
     bool ret = true;
