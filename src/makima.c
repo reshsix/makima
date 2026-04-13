@@ -273,7 +273,8 @@ identify(struct gateway *g, struct json_object *d)
         json_object_object_add(data, "shards", shards);
         json_object_object_add(data, "token", json_object_new_string(g->token));
 
-        uint32_t intents = (1 << 0) | (1 << 9) | (1 << 12) | (1 << 15);
+        uint32_t intents = (1 << 0)  | (1 << 9)  | (1 << 10) |
+                           (1 << 12) | (1 << 13) | (1 << 15) ;
         json_object_object_add(data, "intents", json_object_new_int(intents));
 
         ret = event(g, 2, data);
@@ -338,6 +339,49 @@ parse_message(struct json_object *d)
     fflush(stdout);
 }
 
+static void
+parse_reaction(struct json_object *d, bool added)
+{
+    uint64_t author   = 0;
+    uint64_t message  = 0;
+    uint64_t channel  = 0;
+    uint64_t server   = 0;
+
+    struct json_object *emoji_d = NULL;
+    json_object_object_foreach(d, key, val)
+    {
+        if (strcmp(key, "emoji") == 0)
+            emoji_d = val;
+        else if (strcmp(key, "user_id") == 0)
+            author  = json_object_get_uint64(val);
+        else if (strcmp(key, "message_id") == 0)
+            message = json_object_get_uint64(val);
+        else if (strcmp(key, "channel_id") == 0)
+            channel = json_object_get_uint64(val);
+        else if (strcmp(key, "guild_id") == 0)
+            server  = json_object_get_uint64(val);
+    }
+
+    uint64_t emoji_id = 0;
+    const char *emoji_name = NULL;
+    json_object_object_foreach(emoji_d, key2, val2)
+    {
+        if (strcmp(key2, "id") == 0)
+            emoji_id   = json_object_get_uint64(val2);
+        else if (strcmp(key2, "name") == 0)
+            emoji_name = json_object_get_string(val2);
+    }
+
+    fprintf(stdout, "REACTION %d %" PRIu64 " %" PRIu64
+                               " %" PRIu64 " %" PRIu64 " %.64s",
+            (int)added, author, message, channel, server, emoji_name);
+    if (emoji_id)
+        fprintf(stdout, ":%" PRIu64, emoji_id);
+
+    fprintf(stdout, "\n");
+    fflush(stdout);
+}
+
 static bool
 parse(struct gateway *g)
 {
@@ -375,6 +419,10 @@ parse(struct gateway *g)
                     message(g, MESSAGE_WARN, "Resumed");
                 else if (strcmp(t, "MESSAGE_CREATE") == 0)
                     parse_message(d);
+                else if (strcmp(t, "MESSAGE_REACTION_ADD") == 0)
+                    parse_reaction(d, true);
+                else if (strcmp(t, "MESSAGE_REACTION_REMOVE") == 0)
+                    parse_reaction(d, false);
                 break;
             case 1:
                 ret = heartbeat(g);

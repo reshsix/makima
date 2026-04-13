@@ -43,9 +43,18 @@ on_message(makima *m, uint64_t author, uint64_t channel, uint64_t server,
     return ret;
 }
 
+static bool
+on_reaction(makima *m, bool added, uint64_t author, uint64_t message,
+            uint64_t channel, uint64_t server, const char *emoji)
+{
+    printf("%d %lu %lu %lu %lu %s\n",
+           added, author, message, channel, server, emoji);
+}
+
 int main(void)
 {
-    struct makima_cb cb = {.on_message = on_message};
+    struct makima_cb cb = {.on_message  = on_message,
+                           .on_reaction = on_reaction};
     makima *m = makima_new(NULL, cb);
     while (makima_next(m));
     makima_del(m);

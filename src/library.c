@@ -307,6 +307,22 @@ on_message(struct makima *m, const char *line)
     return ret;
 }
 
+static bool
+on_reaction(struct makima *m, const char *line)
+{
+    bool ret = false;
+
+    int added;
+    uint64_t author, message, channel, server;
+    int consumed = 0;
+    if (sscanf(line,"REACTION %d %" SCNu64 " %" SCNu64
+                               " %" SCNu64 " %" SCNu64 " %n",
+               &added, &author, &message, &channel, &server, &consumed) == 5)
+        ret = m->cb.on_reaction(m, added, author, message, channel,
+                                server, line + consumed);
+    return ret;
+}
+
 extern bool
 makima_next(struct makima *m)
 {
@@ -329,6 +345,8 @@ makima_next(struct makima *m)
             ret = on_token(m, line);
         else if (strcmp(command, "MESSAGE") == 0)
             ret = on_message(m, line);
+        else if (strcmp(command, "REACTION") == 0)
+            ret = on_reaction(m, line);
     }
 
     return ret;

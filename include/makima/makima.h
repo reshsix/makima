@@ -26,6 +26,8 @@ struct makima_cb
 {
     bool (*on_message)(struct makima *m,
                        uint64_t, uint64_t, uint64_t, uint64_t, const char *);
+    bool (*on_reaction)(struct makima *m, bool,
+                        uint64_t, uint64_t, uint64_t, uint64_t, const char *);
 };
 
 makima *makima_new(void *ctx, struct makima_cb cb);
