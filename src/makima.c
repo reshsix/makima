@@ -334,8 +334,31 @@ parse_message(struct json_object *d)
     }
 
     fprintf(stdout, "MESSAGE %" PRIu64 " %" PRIu64
-                           " %" PRIu64 " %" PRIu64 " %.255s\n",
-            author, message, channel, server, content);
+                           " %" PRIu64 " %" PRIu64 " ",
+            author, message, channel, server);
+
+    if (content)
+    {
+        for (size_t i = 0; content[i] != '\0'; i++)
+        {
+            switch (content[i])
+            {
+                case '\\':
+                    fputc('\\', stdout);
+                    fputc('\\', stdout);
+                    break;
+                case '\n':
+                    fputc('\\', stdout);
+                    fputc('n',  stdout);
+                    break;
+                default:
+                    fputc(content[i], stdout);
+                    break;
+            }
+        }
+    }
+    fputc('\n', stdout);
+
     fflush(stdout);
 }
 

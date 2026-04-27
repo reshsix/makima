@@ -348,8 +348,40 @@ on_message(struct makima *m, const char *line)
     if (sscanf(line,"MESSAGE %" SCNu64 " %" SCNu64
                            " %" SCNu64 " %" SCNu64 " %n",
                &author, &message, &channel, &server, &consumed) == 4)
+    {
+        const char *content = line + consumed;
+        char content2[2000] = {0};
+
+        for (size_t i = 0; content[i] != '\0'; i++)
+        {
+            switch (content[i])
+            {
+                case '\\':
+                    switch (content[i + 1])
+                    {
+                        case 'n':
+                            content = &(content[1]);
+                            content2[i] = '\n';
+                            break;
+                        case '\\':
+                            content = &(content[1]);
+                            content2[i] = '\\';
+                            break;
+                        default:
+                            content2[i] = '\\';
+                            break;
+                    }
+                    break;
+                default:
+                    content2[i] = content[i];
+                    break;
+            }
+        }
+
         ret = m->cb.on_message(m, author, message, channel,
-                               server, line + consumed);
+                               server, content2);
+    }
+
     return ret;
 }
 
